@@ -75,7 +75,7 @@ jobs:
           EOF
 
           # Icon (reuse your existing png)
-          cp packaging/linux/pdf_cypher.png \
+          cp packaging/linux/Office_files_Cypher.png \
              pkgroot/usr/share/icons/hicolor/256x256/apps/Office_files_Cypher.png
 
           # Control file
