@@ -71,7 +71,7 @@ jobs:
           install -m 0644 packaging/linux/Office_files_Cypher.desktop \
             "${PKGROOT}/usr/share/applications/${APPNAME}.desktop"
 
-          install -m 0644 packaging/linux/Office_files_Cypher.png \
+          install -m 0644 packaging/linux/office_files_cypher.png \
             "${PKGROOT}/usr/share/icons/hicolor/256x256/apps/${APPNAME}.png"
 
           # control sin heredoc
