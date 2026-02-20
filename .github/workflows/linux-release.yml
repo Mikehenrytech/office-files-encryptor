@@ -1,0 +1,72 @@
+name: Build Linux Binary (PyInstaller) and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # Dependencias necesarias para apps Qt en build (y para evitar fallos raros en imports)
+      - name: Install system deps (Qt runtime)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-xfixes0 \
+            libxrender1 \
+            libxi6 \
+            libxrandr2
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with spec
+        run: |
+          pyinstaller --noconfirm --clean Office_files_Cypher.spec
+
+      - name: Package artifact
+        run: |
+          test -f dist/Office_files_Cypher
+          mkdir -p release
+          cp dist/Office_files_Cypher release/
+          chmod +x release/Office_files_Cypher
+          tar -czf release/Office_files_Cypher-linux-x64.tar.gz -C release Office_files_Cypher
+
+      - name: Upload build artifact (Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Office_files_Cypher-linux-x64
+          path: release/Office_files_Cypher-linux-x64.tar.gz
+
+      - name: Create GitHub Release and upload asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/Office_files_Cypher-linux-x64.tar.gz
