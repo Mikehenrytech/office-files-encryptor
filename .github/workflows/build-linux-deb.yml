@@ -1,0 +1,108 @@
+name: Build Linux DEB and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build binary
+        run: |
+          pyinstaller --noconfirm --clean --onefile \
+            --name pdf-cypher \
+            --add-data "i18n:i18n" \
+            src/main.py
+
+      - name: Build .deb package
+        run: |
+          set -eux
+
+          # Debian version must start with a digit.
+          # If building from a tag vX.Y.Z => X.Y.Z
+          # Otherwise => 0.0.0+g<shortsha>
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            SHORT_SHA="$(git rev-parse --short HEAD)"
+            VERSION="0.0.0+g${SHORT_SHA}"
+          fi
+
+          mkdir -p pkgroot/DEBIAN
+          mkdir -p pkgroot/usr/bin
+          mkdir -p pkgroot/usr/share/applications
+          mkdir -p pkgroot/usr/share/icons/hicolor/256x256/apps
+
+          # Binary
+          cp dist/pdf-cypher pkgroot/usr/bin/pdf-cypher
+          chmod 755 pkgroot/usr/bin/pdf-cypher
+
+          # Desktop entry
+          cat > pkgroot/usr/share/applications/Office-files-Cypher.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=PDF Cypher
+          Exec=/usr/bin/office-files-cypher
+          Icon=pdf-cypher
+          Categories=Utility;
+          Terminal=false
+          EOF
+
+          # Icon (reuse your existing png)
+          cp packaging/linux/pdf_cypher.png \
+             pkgroot/usr/share/icons/hicolor/256x256/apps/Office_files_Cypher.png
+
+          # Control file
+          cat > pkgroot/DEBIAN/control << EOF
+          Package: office-files-cypher
+          Version: ${VERSION}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Miguel E. <you@example.com>
+          Depends: libc6, libgl1, libxkbcommon-x11-0, libxcb1, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-render-util0, libxcb-shape0, libxcb-util1, libxcb-xkb1, libxcb-cursor0
+          Description: Office-Files-Cypher - Encrypt PDF, Word, Excel and Power Point with strong password protection
+           Simple GUI tool to batch-encrypt PDF files using AES-256.
+          EOF
+
+          dpkg-deb --build pkgroot "Office_files_Cypher_${VERSION}_amd64.deb"
+          mkdir -p release
+          mv "Office_files_Cypher_${VERSION}_amd64.deb" release/
+
+      - name: Upload artifact (Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Office_files_Cypher-deb
+          path: release/*.deb
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.deb
